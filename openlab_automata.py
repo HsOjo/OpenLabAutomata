@@ -2,6 +2,7 @@ import json
 import re
 
 import requests
+from xeger import Xeger
 
 
 class OpenLabAutomata:
@@ -10,6 +11,7 @@ class OpenLabAutomata:
         self.EXERCISE_INDEX_URL = 'http://%s/studentExercise/index' % host
         self.EXERCISE_GET_NODE_URL = 'http://%s/studentExercise/ajaxGetNodes' % host
         self.EXERCISE_SUBMIT_SELECT_URL = 'http://%s/studentExercise/ajaxSubmitSelect' % host
+        self.EXERCISE_SUBMIT_FILL_URL = 'http://%s/studentExercise/ajaxSubmitFill' % host
 
         self._session = requests.session()
         self.user = None  # type: dict
@@ -82,7 +84,7 @@ class OpenLabAutomata:
                 result += self.get_exercise_nodes_all(node)
         return result
 
-    def submit_select(self, p_id, real_id, answer_num: list, score, class_id):
+    def submit_select(self, p_id, real_id, score, class_id, answer_num: list):
         try:
             ids_data = answer_num.copy()
             if 0 in ids_data:
@@ -102,3 +104,41 @@ class OpenLabAutomata:
             return bool(data['correct_sign'])
         except:
             return None
+
+    def submit_fill(self, p_id, real_id, score, class_id, content=None):
+        try:
+            form_get = {
+                'currentClassId': class_id,
+            }
+            form = {
+                'exerciseId': real_id,
+                'text': content,
+                'score': score,
+                'my_xrcs_exam_id': 0,
+                'section_id': p_id,
+            }
+            resp = self._session.post(self.EXERCISE_SUBMIT_FILL_URL, data=form, params=form_get)
+            resp_str = resp.content.decode()
+            data = json.loads(resp_str)
+            if content is None:
+                print(data)
+                answer = self._generate_answer(data['test_txt'])
+                return self.submit_fill(p_id, real_id, score, class_id, answer)
+            return bool(data['correct_sign'])
+        except:
+            return None
+
+    def _generate_answer(self, test_txt):
+        reg = re.compile('0\((.*?)\);')
+        regs_str = [i for i in reg.findall(test_txt)]
+
+        result = ''
+        x = Xeger(limit=1)
+        x._alphabets['whitespace'] = ' '
+        x._cases['any'] = lambda x: '.'
+        for reg_str in regs_str:
+            if result != '':
+                result += '\n'
+            result += x.xeger(reg_str).strip()
+
+        return result
