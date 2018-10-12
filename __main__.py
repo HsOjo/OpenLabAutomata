@@ -2,6 +2,12 @@ from openlab_automata import OpenLabAutomata
 
 print('''本程序用于自动完成openlab的选择、填空题\n于深职院考试平台（锐格软件）测试通过\n深职院用户主机项请留空''')
 
+map_type = {
+    '0': '[选择题]',
+    '1': '[填空题]',
+    '2': '[编程题]',
+}
+
 host = input('主机:')
 username = input('用户名:')
 password = input('密码:')
@@ -27,14 +33,17 @@ if client.login(username, password):
 
     for node in nodes_all:
         if node['type'] == 'exercise':
+            type_str = map_type.get(node['etype'], '[未知类型]')
             if node['correct_sign'] == 0:
                 if node['etype'] == '0':
                     client.submit_select(node['pId'], node['realId'], node['myscore'], class_id, node['answerNum'])
-                    print('[已完成]', node['name'])
-                if node['etype'] == '1':
+                    print('[已完成]', type_str, node['name'])
+                elif node['etype'] == '1':
                     client.submit_fill(node['pId'], node['realId'], node['myscore'], class_id)
-                    print('[已完成]', node['name'])
+                    print('[已完成]', type_str, node['name'])
+                else:
+                    print('[不支持]', type_str, node['name'])
             else:
-                print('[跳过]', node['name'])
+                print('[已完成]', type_str, node['name'])
         else:
             print(node['name'])
