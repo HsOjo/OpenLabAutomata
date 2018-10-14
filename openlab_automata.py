@@ -1,7 +1,10 @@
+import html
 import json
 import re
+import time
 
 import requests
+from bs4 import BeautifulSoup
 from xeger import Xeger
 
 
@@ -12,6 +15,9 @@ class OpenLabAutomata:
         self.EXERCISE_GET_NODE_URL = 'http://%s/studentExercise/ajaxGetNodes' % host
         self.EXERCISE_SUBMIT_SELECT_URL = 'http://%s/studentExercise/ajaxSubmitSelect' % host
         self.EXERCISE_SUBMIT_FILL_URL = 'http://%s/studentExercise/ajaxSubmitFill' % host
+        self.EXERCISE_SUBMIT_PRG_URL = 'http://%s/studentExercise/ajaxSubmitPrg' % host
+        self.EXERCISE_CHECK_PRG_URL = 'http://%s/studentExercise/ajaxCheckPrg' % host
+        self.EXERCISE_LOAD_URL = 'http://%s/studentExercise/ajaxLoad' % host
 
         self._session = requests.session()
         self.user = None  # type: dict
@@ -121,7 +127,6 @@ class OpenLabAutomata:
             resp_str = resp.content.decode()
             data = json.loads(resp_str)
             if content is None:
-                print(data)
                 answer = self._generate_answer(data['test_txt'])
                 return self.submit_fill(p_id, real_id, score, class_id, answer)
             return bool(data['correct_sign'])
@@ -141,4 +146,77 @@ class OpenLabAutomata:
                 result += '\n'
             result += x.xeger(reg_str).strip()
 
+        return result
+
+    def submit_program(self, p_id, real_id, score, class_id, content=None):
+        try:
+            form_get = {
+                'languageCode': 3,
+            }
+            form = {
+                'exerciseId': real_id,
+                'text': content,
+                'section_id': p_id,
+            }
+            resp = self._session.post(self.EXERCISE_SUBMIT_PRG_URL, data=form, params=form_get)
+            resp_str = resp.content.decode()
+            if 'OK' in resp_str:
+                data = None  # type: dict
+                for _ in range(3):
+                    data = self._check_program(p_id, real_id, score, class_id)
+                    if data['executed']:
+                        break
+                    time.sleep(1)
+
+                return bool(data['feedback']['correct_sign'])
+        except:
+            return None
+
+    def _check_program(self, p_id, real_id, score, class_id):
+        try:
+            form = {
+                'id': real_id,
+                'score': score,
+                'my_xrcs_exam_id': 0,
+                'my_xrcs_exam_type': 0,
+                'section_id': p_id,
+                'currentClassId': class_id,
+            }
+            resp = self._session.get(self.EXERCISE_CHECK_PRG_URL, params=form)
+            resp_str = resp.content.decode()
+            data = json.loads(resp_str)
+            return data
+        except:
+            return None
+
+    def load_exercise(self, p_id, real_id, class_id):
+        try:
+            form = {
+                'activeType': 'exercise',
+                'activeId': real_id,
+                'section_id': p_id,
+                'classId': class_id,
+            }
+            resp = self._session.get(self.EXERCISE_LOAD_URL, params=form)
+            resp_str = resp.content.decode()
+            data = json.loads(resp_str)
+            return data
+        except:
+            return None
+
+    def get_exercise_content(self, content):
+        bs = BeautifulSoup(content, "html.parser")
+        for s in bs(['script', 'a']):
+            s.extract()
+        result = bs.text
+        result = result.replace('代码编辑:', '')
+        result = result.replace('结果反馈:', '')
+        result = result.strip()
+
+        return result
+
+    def get_exercise_code(self, content):
+        reg = re.compile('id="originCodeInput" code="([\s\S]*)" >')
+        [result] = reg.findall(content)
+        result = html.unescape(result)
         return result
