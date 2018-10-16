@@ -35,15 +35,21 @@ if client.login(username, password):
         if node['type'] == 'exercise':
             type_str = map_type.get(node['etype'], '[未知类型]')
             if node['correct_sign'] == 0:
+                result = False
                 if node['etype'] == '0':
-                    client.submit_select(node['pId'], node['realId'], node['myscore'], class_id, node['answerNum'])
-                    print('[已完成]', type_str, node['name'])
+                    result = client.submit_select(node['pId'], node['realId'], node['myscore'], class_id,
+                                                  node['answerNum'])
                 elif node['etype'] == '1':
-                    client.submit_fill(node['pId'], node['realId'], node['myscore'], class_id)
+                    result = client.submit_fill(node['pId'], node['realId'], node['myscore'], class_id)
+                elif node['etype'] == '2':
+                    result = client.submit_program(node['pId'], node['realId'], node['myscore'], class_id)
+
+                if result:
                     print('[已完成]', type_str, node['name'])
                 else:
                     print('[不支持]', type_str, node['name'])
             else:
-                print('[已完成]', type_str, node['name'])
+                pass
+                # print('[已完成,忽略]', type_str, node['name'])
         else:
             print(node['name'])

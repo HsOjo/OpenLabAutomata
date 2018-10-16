@@ -7,6 +7,32 @@ import requests
 from bs4 import BeautifulSoup
 from xeger import Xeger
 
+PROGRAM = '''import java.util.Scanner;
+public class Main{
+    public static void main(String[] args){
+        Scanner sc = new Scanner(System.in);
+        String str = "";
+        while(sc.hasNext()){
+            if (!str.equals("")) {
+                str += " ";
+            }
+            str += sc.next();
+        }
+        String result = "in:" + str;
+        %s
+        System.out.println(result);
+    }
+}'''
+PROGRAM_NO_INPUT = '''public class Main{
+    public static void main(String[] args){
+        String result = "%s";
+        System.out.println(result);
+    }
+}'''
+CODE_IF = '''if (str.equals("%s")) {
+            result = "%s";
+        }'''
+
 
 class OpenLabAutomata:
     def __init__(self, host):
@@ -126,7 +152,7 @@ class OpenLabAutomata:
             resp = self._session.post(self.EXERCISE_SUBMIT_FILL_URL, data=form, params=form_get)
             resp_str = resp.content.decode()
             data = json.loads(resp_str)
-            if content is None:
+            if not data['correct_sign'] and content is None:
                 answer = self._generate_answer(data['test_txt'])
                 return self.submit_fill(p_id, real_id, score, class_id, answer)
             return bool(data['correct_sign'])
@@ -148,7 +174,7 @@ class OpenLabAutomata:
 
         return result
 
-    def submit_program(self, p_id, real_id, score, class_id, content=None):
+    def submit_program(self, p_id, real_id, score, class_id, content=None, answer=None, no_input=False):
         try:
             form_get = {
                 'languageCode': 3,
@@ -158,15 +184,46 @@ class OpenLabAutomata:
                 'text': content,
                 'section_id': p_id,
             }
+            if content is None:
+                form['text'] = PROGRAM % ''
+
             resp = self._session.post(self.EXERCISE_SUBMIT_PRG_URL, data=form, params=form_get)
             resp_str = resp.content.decode()
             if 'OK' in resp_str:
                 data = None  # type: dict
-                for _ in range(3):
+                for _ in range(10):
+                    time.sleep(0.5)
                     data = self._check_program(p_id, real_id, score, class_id)
                     if data['executed']:
                         break
-                    time.sleep(1)
+
+                if not data['feedback']['correct_sign'] and (content is None or answer is not None):
+                    if answer is None:
+                        answer = {}
+                    explain = data['feedback']['explain']
+                    explain = explain.replace('sfontcolorred', '')
+                    explain = explain.replace('efontcolorred', '')
+
+                    if 'java.util.NoSuchElementException' in explain:
+                        return self.submit_program(p_id, real_id, score, class_id, PROGRAM_NO_INPUT % "in:None", answer,
+                                                   True)
+                    else:
+                        reg = re.compile('输出结果有误<br>正确输出:<br>(.*)<br>您的输出:<br>in:(.*)')
+                        [[value, key]] = reg.findall(explain)
+                        value = value.replace('<br>', '\\n')
+
+                        if no_input:
+                            program = PROGRAM_NO_INPUT % value
+                        else:
+                            answer[key] = value
+                            code_if = ''
+                            for k, v in answer.items():
+                                if code_if != '':
+                                    code_if += ' else '
+                                code_if += CODE_IF % (k, v)
+
+                            program = PROGRAM % code_if
+                        return self.submit_program(p_id, real_id, score, class_id, program, answer, no_input)
 
                 return bool(data['feedback']['correct_sign'])
         except:
