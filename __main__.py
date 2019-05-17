@@ -11,9 +11,14 @@ map_type = {
 host = input('主机:')
 username = input('用户名:')
 password = input('密码:')
+fin_num_str = input('完成题数:')
+if fin_num_str.isnumeric():
+    fin_num = int(fin_num_str)
+else:
+    fin_num = 0
 
 if host == '':
-    host = '112.64.141.46:8071'
+    host = '10.3.25.211'
 
 client = OpenLabAutomata(host)
 if client.login(username, password):
@@ -31,6 +36,7 @@ if client.login(username, password):
     print('加载题目中...')
     nodes_all = client.get_exercise_nodes_all(root_nodes[0])
 
+    count = 0
     for node in nodes_all:
         if node['type'] == 'exercise':
             type_str = map_type.get(node['etype'], '[未知类型]')
@@ -46,6 +52,10 @@ if client.login(username, password):
 
                 if result:
                     print('[已完成]', type_str, node['name'])
+                    count += 1
+                    if fin_num != 0 and count >= fin_num:
+                        print('[退出]到达限制数')
+                        break
                 else:
                     print('[不支持]', type_str, node['name'])
             else:
